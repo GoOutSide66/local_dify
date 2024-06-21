@@ -19,12 +19,13 @@ from core.rag.datasource.vdb.vector_type import VectorType
 from core.rag.extractor.entity.extract_setting import ExtractSetting
 from extensions.ext_database import db
 from fields.app_fields import related_app_list
-from fields.dataset_fields import dataset_detail_fields, dataset_query_detail_fields
+from fields.dataset_fields import dataset_detail_fields, dataset_query_detail_fields, dataset_operation_logs_fields
 from fields.document_fields import document_status_fields
 from libs.login import login_required
 from models.dataset import Dataset, Document, DocumentSegment
 from models.model import ApiToken, UploadFile
-from services.dataset_service import DatasetService, DocumentService
+from services.dataset_service import DatasetService, DocumentService, DatasetOperationLogsService
+from libs.helper import datetime_string
 
 
 def _validate_name(name):
@@ -40,7 +41,7 @@ def _validate_description_length(description):
 
 
 class DatasetListApi(Resource):
-
+    # 知识库
     @setup_required
     @login_required
     @account_initialization_required
@@ -242,14 +243,55 @@ class DatasetQueryApi(Resource):
         page = request.args.get('page', default=1, type=int)
         limit = request.args.get('limit', default=20, type=int)
 
-        dataset_queries, total = DatasetService.get_dataset_queries(
+        dataset_operation_logs, total = DatasetService.get_dataset_queries(
             dataset_id=dataset.id,
             page=page,
             per_page=limit
         )
 
         response = {
-            'data': marshal(dataset_queries, dataset_query_detail_fields),
+            'data': marshal(dataset_operation_logs, dataset_query_detail_fields),
+            'has_more': len(dataset_operation_logs) == limit,
+            'limit': limit,
+            'total': total,
+            'page': page
+        }
+        return response, 200
+# 日志读取
+class DatasetOperationLogsApi(Resource):
+
+    @setup_required
+    @login_required
+    @account_initialization_required
+    def get(self, dataset_id):
+        dataset_id_str = str(dataset_id)
+        dataset = DatasetService.get_dataset(dataset_id_str)
+        if dataset is None:
+            raise NotFound("Dataset not found.")
+
+        try:
+            DatasetService.check_dataset_permission(dataset, current_user)
+        except services.errors.account.NoPermissionError as e:
+            raise Forbidden(str(e))
+
+        page = request.args.get('page', default=1, type=int)
+        limit = request.args.get('limit', default=20, type=int)
+        keyword = request.args.get('keyword', default=None, type=str)
+        created_by = request.args.get('created_by', default='all', type=str)
+        start = request.args.get('start', default=None, type=datetime_string('%Y-%m-%d %H:%M'))
+        end = request.args.get('end', default=None, type=datetime_string('%Y-%m-%d %H:%M'))
+        dataset_queries, total = DatasetOperationLogsService.get_dataset_operation_logs(
+            dataset_id=dataset.id,
+            page=page,
+            per_page=limit,
+            keyword=keyword,
+            created_by=created_by,
+            start=start,
+            end=end
+        )
+
+        response = {
+            'data': marshal(dataset_queries, dataset_operation_logs_fields),
             'has_more': len(dataset_queries) == limit,
             'limit': limit,
             'total': total,
@@ -537,6 +579,7 @@ class DatasetErrorDocs(Resource):
 api.add_resource(DatasetListApi, '/datasets')
 api.add_resource(DatasetApi, '/datasets/<uuid:dataset_id>')
 api.add_resource(DatasetQueryApi, '/datasets/<uuid:dataset_id>/queries')
+api.add_resource(DatasetOperationLogsApi, '/datasets/<uuid:dataset_id>/operationlogs')
 api.add_resource(DatasetErrorDocs, '/datasets/<uuid:dataset_id>/error-docs')
 api.add_resource(DatasetIndexingEstimateApi, '/datasets/indexing-estimate')
 api.add_resource(DatasetRelatedAppListApi, '/datasets/<uuid:dataset_id>/related-apps')

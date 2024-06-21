@@ -29,6 +29,8 @@ from models.dataset import (
     DatasetQuery,
     Document,
     DocumentSegment,
+    DatasetOperationLogs,
+    DatasetOperationType,
 )
 from models.model import UploadFile
 from models.source import DataSourceBinding
@@ -106,6 +108,7 @@ class DatasetService:
         return datasets.items, datasets.total
 
     @staticmethod
+    # 创建空知识库
     def create_empty_dataset(tenant_id: str, name: str, indexing_technique: Optional[str], account: Account):
         # check if dataset name already exists
         if Dataset.query.filter_by(name=name, tenant_id=tenant_id).first():
@@ -126,6 +129,12 @@ class DatasetService:
         dataset.embedding_model_provider = embedding_model.provider if embedding_model else None
         dataset.embedding_model = embedding_model.model if embedding_model else None
         db.session.add(dataset)
+        db.session.flush()
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, [{
+            "objective": '',
+            "opt_type": DatasetOperationType.Create_Dataset.value,
+            "note": '创建空知识库',
+        }])
         db.session.commit()
         return dataset
 
@@ -159,16 +168,27 @@ class DatasetService:
         filtered_data = {k: v for k, v in data.items() if v is not None or k == 'description'}
         dataset = DatasetService.get_dataset(dataset_id)
         DatasetService.check_dataset_permission(dataset, user)
+        # 更新事件日志
+        event_logs = []
+
         action = None
         if dataset.indexing_technique != data['indexing_technique']:
             # if update indexing_technique
+            indexing_change_log = None
             if data['indexing_technique'] == 'economy':
+                indexing_change_log = '索引模式设置为经济'
                 action = 'remove'
                 filtered_data['embedding_model'] = None
                 filtered_data['embedding_model_provider'] = None
                 filtered_data['collection_binding_id'] = None
             elif data['indexing_technique'] == 'high_quality':
-                action = 'add'
+                indexing_change_log = '索引模式设置为高质量'
+                if data['retrieval_model']['search_method'] == 'semantic_search':
+                    indexing_change_log += '（向量检索）'
+                elif data['retrieval_model']['search_method'] == 'full_text_search':
+                    indexing_change_log += '（全文检索）'
+                elif data['retrieval_model']['search_method'] == 'hybrid_search':
+                    indexing_change_log += '（混合检索）'
                 # get embedding model setting
                 try:
                     model_manager = ModelManager()
@@ -191,6 +211,12 @@ class DatasetService:
                         "in the Settings -> Model Provider.")
                 except ProviderTokenNotInitError as ex:
                     raise ValueError(ex.description)
+            if indexing_change_log:
+                event_logs.append({
+                    "objective": '',
+                    "opt_type": DatasetOperationType.Setting_Dataset.value,
+                    "note": indexing_change_log,
+                })
         else:
             if data['embedding_model_provider'] != dataset.embedding_model_provider or \
                     data['embedding_model'] != dataset.embedding_model:
@@ -216,7 +242,24 @@ class DatasetService:
                         "in the Settings -> Model Provider.")
                 except ProviderTokenNotInitError as ex:
                     raise ValueError(ex.description)
-
+        if data['name'] != dataset.name:
+            event_logs.append({
+                "objective": '',
+                "opt_type": DatasetOperationType.Setting_Dataset.value,
+                "note": f'知识库名称修改为： {data["name"]}。',
+            })
+        if data['description'] != dataset.description and dataset.description:
+            event_logs.append({
+                "objective": '',
+                "opt_type": DatasetOperationType.Setting_Dataset.value,
+                "note": f'知识库描述修改为： {data["description"]}。' if data["description"] else '知识库描述清空',
+            })
+        if data['permission'] and data['permission'] != dataset.permission:
+            event_logs.append({
+                "objective": '',
+                "opt_type": DatasetOperationType.Setting_Dataset.value,
+                "note": '可见权限变为：' + ('只有我' if data['permission'] == 'only_me' else '团队成员'),
+            })
         filtered_data['updated_by'] = user.id
         filtered_data['updated_at'] = datetime.datetime.now()
 
@@ -226,6 +269,8 @@ class DatasetService:
         dataset.query.filter_by(id=dataset_id).update(filtered_data)
 
         db.session.commit()
+
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, event_logs)
         if action:
             deal_dataset_vector_index_task.delay(dataset_id, action)
         return dataset
@@ -240,11 +285,18 @@ class DatasetService:
             return False
 
         DatasetService.check_dataset_permission(dataset, user)
-
+        # 异步删除相关数据
         dataset_was_deleted.send(dataset)
 
         db.session.delete(dataset)
         db.session.commit()
+        
+        # 当前默认知识库日志不联动删除，保持数据可查
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, [{
+            "objective": '',
+            "opt_type": DatasetOperationType.Delete_Dataset.value,
+            "note": dataset.name,
+        }])
         return True
 
     @staticmethod
@@ -449,6 +501,11 @@ class DocumentService:
 
         db.session.delete(document)
         db.session.commit()
+        DatasetOperationLogsService.insert_operation_logs(document.dataset_id, [{
+            "objective": document.name,
+            "opt_type": DatasetOperationType.Remove_Document.value,
+            "note": '',
+        }])
 
     @staticmethod
     def rename_document(dataset_id: str, document_id: str, name: str) -> Document:
@@ -457,7 +514,7 @@ class DocumentService:
             raise ValueError('Dataset not found.')
 
         document = DocumentService.get_document(dataset_id, document_id)
-
+        origin_name = document.name
         if not document:
             raise ValueError('Document not found.')
 
@@ -468,7 +525,11 @@ class DocumentService:
 
         db.session.add(document)
         db.session.commit()
-
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, [{
+            "objective": origin_name,
+            "opt_type": DatasetOperationType.Rename_Document.value,
+            "note": f'新名称: {document.name}',
+        }])
         return document
 
     @staticmethod
@@ -588,9 +649,10 @@ class DocumentService:
                         'retrieval_model') else default_retrieval_model
 
         documents = []
+        event_logs = []
         batch = time.strftime('%Y%m%d%H%M%S') + str(random.randint(100000, 999999))
         if document_data.get("original_document_id"):
-            document = DocumentService.update_document_with_dataset_id(dataset, document_data, account)
+            document = DocumentService.update_document_with_dataset_id(dataset, document_data, account, event_logs)
             documents.append(document)
         else:
             # save process rule
@@ -610,6 +672,11 @@ class DocumentService:
                         rules=json.dumps(DatasetProcessRule.AUTOMATIC_RULES),
                         created_by=account.id
                     )
+                event_logs.append({
+                    "objective": '',
+                    "opt_type": DatasetOperationType.Setting_Segment.value,
+                    "note": '自动' if process_rule["mode"] == "automatic" else '自定义',
+                })
                 db.session.add(dataset_process_rule)
                 db.session.commit()
             position = DocumentService.get_documents_position(dataset.id)
@@ -659,6 +726,11 @@ class DocumentService:
                                                               document_data["doc_language"],
                                                               data_source_info, created_from, position,
                                                               account, file_name, batch)
+                    event_logs.append({
+                        "objective": document.name,
+                        "opt_type": DatasetOperationType.Upload_Document.value,
+                        "note": '',
+                    })
                     db.session.add(document)
                     db.session.flush()
                     document_ids.append(document.id)
@@ -723,7 +795,7 @@ class DocumentService:
             if duplicate_document_ids:
                 duplicate_document_indexing_task.delay(dataset.id, duplicate_document_ids)
 
-        return documents, batch
+        return documents, batch, event_logs
 
     @staticmethod
     def check_documents_upload_quota(count: int, features: FeatureModel):
@@ -763,7 +835,7 @@ class DocumentService:
 
     @staticmethod
     def update_document_with_dataset_id(dataset: Dataset, document_data: dict,
-                                        account: Account, dataset_process_rule: Optional[DatasetProcessRule] = None,
+                                        account: Account, event_logs: list, dataset_process_rule: Optional[DatasetProcessRule] = None,
                                         created_from: str = 'web'):
         DatasetService.check_dataset_model_setting(dataset)
         document = DocumentService.get_document(dataset.id, document_data["original_document_id"])
@@ -782,6 +854,11 @@ class DocumentService:
                     rules=json.dumps(process_rule["rules"]),
                     created_by=account.id
                 )
+                event_logs.append({
+                    "objective": document.name,
+                    "opt_type": DatasetOperationType.Setting_Segment.value,
+                    "note": '自定义',
+                })
             elif process_rule["mode"] == "automatic":
                 dataset_process_rule = DatasetProcessRule(
                     dataset_id=dataset.id,
@@ -789,6 +866,11 @@ class DocumentService:
                     rules=json.dumps(DatasetProcessRule.AUTOMATIC_RULES),
                     created_by=account.id
                 )
+                event_logs.append({
+                    "objective": document.name,
+                    "opt_type": DatasetOperationType.Setting_Segment.value,
+                    "note": '自动',
+                })
             db.session.add(dataset_process_rule)
             db.session.commit()
             document.dataset_process_rule_id = dataset_process_rule.id
@@ -859,6 +941,7 @@ class DocumentService:
         return document
 
     @staticmethod
+    # 初始化知识库
     def save_document_without_dataset_id(tenant_id: str, document_data: dict, account: Account):
         features = FeatureService.get_features(current_user.current_tenant_id)
 
@@ -921,13 +1004,36 @@ class DocumentService:
         db.session.add(dataset)
         db.session.flush()
 
-        documents, batch = DocumentService.save_document_with_dataset_id(dataset, document_data, account)
+        documents, batch, event_logs = DocumentService.save_document_with_dataset_id(dataset, document_data, account)
 
         cut_length = 18
         cut_name = documents[0].name[:cut_length]
         dataset.name = cut_name + '...'
         dataset.description = 'useful for when you want to answer queries about the ' + documents[0].name
         db.session.commit()
+        # 事件日志
+        event_logs.append({
+            "objective": '',
+            "opt_type": DatasetOperationType.Create_Dataset.value,
+            "note": '',
+        })
+        indexing_change_log = ''
+        if document_data['indexing_technique'] == 'economy':
+            indexing_change_log = '索引模式设置为经济'
+        elif document_data['indexing_technique'] == 'high_quality':
+            indexing_change_log = '索引模式设置为高质量'
+            if retrieval_model['search_method'] == 'semantic_search':
+                indexing_change_log += '（向量检索）'
+            elif retrieval_model['search_method'] == 'full_text_search':
+                indexing_change_log += '（全文检索）'
+            elif retrieval_model['search_method'] == 'hybrid_search':
+                indexing_change_log += '（混合检索）'
+        event_logs.append({
+            "objective": '',
+            "opt_type": DatasetOperationType.Setting_Dataset.value,
+            "note": indexing_change_log,
+        })
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, event_logs)
 
         return dataset, documents, batch
 
@@ -1394,3 +1500,50 @@ class DatasetCollectionBindingService:
             first()
 
         return dataset_collection_binding
+
+# 知识库日志service
+class DatasetOperationLogsService:
+    @staticmethod
+    #获取日志列表
+    def get_dataset_operation_logs(dataset_id: str, page: int, per_page: int, keyword: str,
+            created_by: str, start:str, end:str):
+        query = DatasetOperationLogs.query.filter_by(dataset_id=dataset_id) \
+                                     .order_by(db.desc(DatasetOperationLogs.created_at))
+        # 添加关键词搜索条件
+        if keyword:
+            search_conditions = [
+                DatasetOperationLogs.objective.like(f'%{keyword}%'),
+                DatasetOperationLogs.opt_type.like(f'%{keyword}%'),
+                DatasetOperationLogs.note.like(f'%{keyword}%')
+            ]
+            query = query.filter(db.or_(*search_conditions))
+        # 根据操作用户ID过滤
+        if created_by and created_by != 'all':
+            query = query.filter_by(created_by=created_by)
+        # 时间范围筛选
+        if start and end:
+            query = query.filter(db.and_(DatasetOperationLogs.created_at >= start, DatasetOperationLogs.created_at <= end))
+        # 分页查询
+        dataset_queries = query.paginate(page=page, per_page=per_page, max_per_page=100, error_out=False)
+        
+        return dataset_queries.items, dataset_queries.total
+
+    @staticmethod
+    #保存日志
+    def insert_operation_logs(dataset_id: str, events: list):
+        # 同批次日志创建时间设置为相同
+        create_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        for event in events:
+            log = DatasetOperationLogs(
+                    dataset_id=dataset_id,
+                    objective = event.get('objective'),
+                    opt_type = event.get('opt_type'),
+                    note = event.get('note'),
+                    created_by = current_user.id,
+                    created_at = create_at,
+                )
+            db.session.add(log)
+            db.session.flush()
+        db.session.commit()
+        return dataset_id
+

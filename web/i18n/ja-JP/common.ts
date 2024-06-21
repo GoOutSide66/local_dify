@@ -369,6 +369,7 @@ const translation = {
   datasetMenus: {
     documents: 'ドキュメント',
     hitTesting: '検索テスト',
+    operationLogs: '操作ログ',
     settings: '設定',
     emptyTip: '関連付けられた知識がありません。アプリケーションやプラグインに移動して関連付けを完了してください。',
     viewDoc: 'ドキュメントを表示',

@@ -432,6 +432,7 @@ const translation = {
   datasetMenus: {
     documents: 'Dokumenty',
     hitTesting: 'Testowanie poboru',
+    operationLogs: 'Logi operacji',
     settings: 'Ustawienia',
     emptyTip:
       'Wiedza nie została powiązana, przejdź do aplikacji lub wtyczki, aby ukończyć powiązanie.',

@@ -23,6 +23,8 @@ import {
 } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import s from './style.module.css'
+import { FileHeart02 } from '@/app/components/base/icons/src/vender/line/development'
+import { FileHeart02 as FileHeart02Solid } from '@/app/components/base/icons/src/vender/solid/development'
 import { fetchDatasetDetail, fetchDatasetRelatedApps } from '@/service/datasets'
 import type { RelatedApp, RelatedAppResponse } from '@/models/datasets'
 import AppSideBar from '@/app/components/app-sidebar'
@@ -205,6 +207,7 @@ const DatasetDetailLayout: FC<IAppDetailLayoutProps> = (props) => {
     { name: t('common.datasetMenus.documents'), href: `/datasets/${datasetId}/documents`, icon: DocumentTextIcon, selectedIcon: DocumentTextSolidIcon },
     { name: t('common.datasetMenus.hitTesting'), href: `/datasets/${datasetId}/hitTesting`, icon: TargetIcon, selectedIcon: TargetSolidIcon },
     // { name: 'api & webhook', href: `/datasets/${datasetId}/api`, icon: CommandLineIcon, selectedIcon: CommandLineSolidIcon },
+    { name: t('common.datasetMenus.operationLogs'), href: `/datasets/${datasetId}/operationLogs`, icon: FileHeart02, selectedIcon: FileHeart02Solid },
     { name: t('common.datasetMenus.settings'), href: `/datasets/${datasetId}/settings`, icon: Cog8ToothIcon, selectedIcon: Cog8ToothSolidIcon },
   ]
 

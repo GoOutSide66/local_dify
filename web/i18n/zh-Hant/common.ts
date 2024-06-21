@@ -418,6 +418,7 @@ const translation = {
   datasetMenus: {
     documents: '文件',
     hitTesting: '召回測試',
+    operationLogs: '操作日誌',
     settings: '設定',
     emptyTip: ' 知識庫尚未關聯，請前往應用程式或外掛完成關聯。',
     viewDoc: '檢視文件',

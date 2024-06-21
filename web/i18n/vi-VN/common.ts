@@ -417,6 +417,7 @@ const translation = {
   datasetMenus: {
     documents: 'Tài liệu',
     hitTesting: 'Kiểm tra truy vấn',
+    operationLogs: 'Nhật ký hoạt động',
     settings: 'Cài đặt',
     emptyTip: 'Kiến thức chưa được liên kết, vui lòng đi đến ứng dụng hoặc plug-in để hoàn thành liên kết.',
     viewDoc: 'Xem tài liệu',

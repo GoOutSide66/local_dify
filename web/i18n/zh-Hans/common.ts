@@ -433,6 +433,7 @@ const translation = {
   datasetMenus: {
     documents: '文档',
     hitTesting: '召回测试',
+    operationLogs: '操作日志',
     settings: '设置',
     emptyTip: ' 知识库尚未关联，请前往应用程序或插件完成关联。',
     viewDoc: '查看文档',

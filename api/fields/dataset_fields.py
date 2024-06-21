@@ -65,4 +65,14 @@ dataset_query_detail_fields = {
     "created_at": TimestampField
 }
 
-
+dataset_operation_logs_fields = {
+    "id": fields.String,
+    "dataset_id": fields.String,
+    "objective":fields.String,
+    "opt_type":fields.String,
+    "note": fields.String,
+    "created_by": fields.String,
+    "dataset_name": fields.String,
+    "created_name": fields.String,
+    "created_at": TimestampField
+}

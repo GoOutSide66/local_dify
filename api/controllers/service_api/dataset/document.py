@@ -72,7 +72,7 @@ class DocumentAddByTextApi(DatasetApiResource):
         DocumentService.document_create_args_validate(args)
 
         try:
-            documents, batch = DocumentService.save_document_with_dataset_id(
+            documents, batch, event_logs = DocumentService.save_document_with_dataset_id(
                 dataset=dataset,
                 document_data=args,
                 account=current_user,
@@ -133,7 +133,7 @@ class DocumentUpdateByTextApi(DatasetApiResource):
         DocumentService.document_create_args_validate(args)
 
         try:
-            documents, batch = DocumentService.save_document_with_dataset_id(
+            documents, batch, event_logs = DocumentService.save_document_with_dataset_id(
                 dataset=dataset,
                 document_data=args,
                 account=current_user,
@@ -200,7 +200,7 @@ class DocumentAddByFileApi(DatasetApiResource):
         DocumentService.document_create_args_validate(args)
 
         try:
-            documents, batch = DocumentService.save_document_with_dataset_id(
+            documents, batch, event_logs = DocumentService.save_document_with_dataset_id(
                 dataset=dataset,
                 document_data=args,
                 account=dataset.created_by_account,
@@ -264,7 +264,7 @@ class DocumentUpdateByFileApi(DatasetApiResource):
         DocumentService.document_create_args_validate(args)
 
         try:
-            documents, batch = DocumentService.save_document_with_dataset_id(
+            documents, batch, event_logs = DocumentService.save_document_with_dataset_id(
                 dataset=dataset,
                 document_data=args,
                 account=dataset.created_by_account,

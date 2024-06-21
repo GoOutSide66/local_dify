@@ -5,6 +5,7 @@ import type {
   CreateDocumentReq,
   DataSet,
   DataSetListResponse,
+  DataSetOperationsLogsResponse,
   DocumentDetailResponse,
   DocumentListResponse,
   ErrorDocsResponse,
@@ -241,4 +242,18 @@ export const getErrorDocs: Fetcher<ErrorDocsResponse, { datasetId: string }> = (
 
 export const retryErrorDocs: Fetcher<CommonResponse, { datasetId: string; document_ids: string[] }> = ({ datasetId, document_ids }) => {
   return post<CommonResponse>(`/datasets/${datasetId}/retry`, { body: { document_ids } })
+}
+
+export const getDatasetOperationLogs: Fetcher<DataSetOperationsLogsResponse, {
+  datasetId: string
+  params: {
+    limit: number
+    page: number
+    keyword?: string
+    created_by?: string
+    start?: string
+    end?: string
+  } }> = ({ datasetId, params }) => {
+  const urlParams = qs.stringify(params, { indices: false })
+  return get<DataSetOperationsLogsResponse>(`/datasets/${datasetId}/operationlogs?${urlParams}`)
 }

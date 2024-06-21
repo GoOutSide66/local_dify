@@ -418,6 +418,7 @@ const translation = {
   datasetMenus: {
     documents: 'Documents',
     hitTesting: 'Test de Récupération',
+    operationLogs: 'Journaux d\'opération',
     settings: 'Paramètres',
     emptyTip: 'La Connaissance n\'a pas été associée, veuillez aller à l\'application ou au plug-in pour compléter l\'association.',
     viewDoc: 'Voir la documentation',

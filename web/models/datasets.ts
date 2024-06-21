@@ -31,6 +31,18 @@ export type DataSet = {
   tags: Tag[]
 }
 
+export type DataSetOperationLog = {
+  id: string
+  dataset_id: string
+  objective: string
+  opt_type: string
+  note: string
+  created_by: string
+  dataset_name: string
+  created_name: string
+  created_at: Date
+}
+
 export type CustomFile = File & {
   id?: string
   extension?: string
@@ -47,6 +59,14 @@ export type FileItem = {
 
 export type DataSetListResponse = {
   data: DataSet[]
+  has_more: boolean
+  limit: number
+  page: number
+  total: number
+}
+
+export type DataSetOperationsLogsResponse = {
+  data: DataSetOperationLog[]
   has_more: boolean
   limit: number
   page: number

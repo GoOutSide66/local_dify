@@ -45,9 +45,15 @@ from fields.document_fields import (
     document_with_segments_fields,
 )
 from libs.login import login_required
-from models.dataset import Dataset, DatasetProcessRule, Document, DocumentSegment
+from models.dataset import (
+    Dataset, 
+    DatasetProcessRule, 
+    Document, 
+    DocumentSegment, 
+    DatasetOperationType
+)
 from models.model import UploadFile
-from services.dataset_service import DatasetService, DocumentService
+from services.dataset_service import DatasetService, DocumentService, DatasetOperationLogsService
 from tasks.add_document_to_index_task import add_document_to_index_task
 from tasks.remove_document_from_index_task import remove_document_from_index_task
 
@@ -256,7 +262,8 @@ class DatasetDocumentListApi(Resource):
         DocumentService.document_create_args_validate(args)
 
         try:
-            documents, batch = DocumentService.save_document_with_dataset_id(dataset, args, current_user)
+            documents, batch, event_logs = DocumentService.save_document_with_dataset_id(dataset, args, current_user)
+            DatasetOperationLogsService.insert_operation_logs(dataset.id, event_logs)
         except ProviderTokenNotInitError as ex:
             raise ProviderNotInitializeError(ex.description)
         except QuotaExceededError:
@@ -271,7 +278,7 @@ class DatasetDocumentListApi(Resource):
 
 
 class DatasetInitApi(Resource):
-
+    # 初始化知识库
     @setup_required
     @login_required
     @account_initialization_required
@@ -726,7 +733,7 @@ class DocumentMetadataApi(DocumentResource):
 
         return {'result': 'success', 'message': 'Document metadata updated.'}, 200
 
-
+# 文件状态修改
 class DocumentStatusApi(DocumentResource):
     @setup_required
     @login_required
@@ -751,7 +758,7 @@ class DocumentStatusApi(DocumentResource):
         cache_result = redis_client.get(indexing_cache_key)
         if cache_result is not None:
             raise InvalidActionError("Document is being indexed, please try again later")
-
+        operation_type = ''
         if action == "enable":
             if document.enabled:
                 raise InvalidActionError('Document already enabled.')
@@ -761,13 +768,13 @@ class DocumentStatusApi(DocumentResource):
             document.disabled_by = None
             document.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
-
+            operation_type = DatasetOperationType.Enable_Document.value
             # Set cache to prevent indexing the same document multiple times
             redis_client.setex(indexing_cache_key, 600, 1)
 
             add_document_to_index_task.delay(document_id)
 
-            return {'result': 'success'}, 200
+            # return {'result': 'success'}, 200
 
         elif action == "disable":
             if not document.completed_at or document.indexing_status != 'completed':
@@ -780,13 +787,14 @@ class DocumentStatusApi(DocumentResource):
             document.disabled_by = current_user.id
             document.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
+            operation_type = DatasetOperationType.Disabled_Document.value
 
             # Set cache to prevent indexing the same document multiple times
             redis_client.setex(indexing_cache_key, 600, 1)
 
             remove_document_from_index_task.delay(document_id)
 
-            return {'result': 'success'}, 200
+            # return {'result': 'success'}, 200
 
         elif action == "archive":
             if document.archived:
@@ -797,6 +805,7 @@ class DocumentStatusApi(DocumentResource):
             document.archived_by = current_user.id
             document.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
+            operation_type = DatasetOperationType.Archive_Document.value
 
             if document.enabled:
                 # Set cache to prevent indexing the same document multiple times
@@ -804,7 +813,7 @@ class DocumentStatusApi(DocumentResource):
 
                 remove_document_from_index_task.delay(document_id)
 
-            return {'result': 'success'}, 200
+            # return {'result': 'success'}, 200
         elif action == "un_archive":
             if not document.archived:
                 raise InvalidActionError('Document is not archived.')
@@ -814,17 +823,23 @@ class DocumentStatusApi(DocumentResource):
             document.archived_by = None
             document.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
+            operation_type = DatasetOperationType.Unarchive_Document.value
 
             # Set cache to prevent indexing the same document multiple times
             redis_client.setex(indexing_cache_key, 600, 1)
 
             add_document_to_index_task.delay(document_id)
 
-            return {'result': 'success'}, 200
+            # return {'result': 'success'}, 200
         else:
             raise InvalidActionError()
 
-
+        DatasetOperationLogsService.insert_operation_logs(dataset.id, [{
+            "objective": document.name,
+            "opt_type": operation_type,
+            "note": '',
+        }])
+        return {'result': 'success'}, 200
 class DocumentPauseApi(DocumentResource):
 
     @setup_required

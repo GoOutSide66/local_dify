@@ -417,6 +417,7 @@ const translation = {
   datasetMenus: {
     documents: 'Documente',
     hitTesting: 'Testare recuperare',
+    operationLogs: 'Jurnale operații',
     settings: 'Setări',
     emptyTip: 'Cunoștințele nu au fost asociate, vă rugăm să mergeți la aplicație sau la plug-in pentru a finaliza asocierea.',
     viewDoc: 'Vizualizați documentația',

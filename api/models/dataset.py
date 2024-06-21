@@ -7,6 +7,7 @@ import os
 import pickle
 import re
 import time
+from enum import Enum
 from json import JSONDecodeError
 
 from flask import current_app
@@ -560,3 +561,41 @@ class DatasetCollectionBinding(db.Model):
     type = db.Column(db.String(40), server_default=db.text("'dataset'::character varying"), nullable=False)
     collection_name = db.Column(db.String(64), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.text('CURRENT_TIMESTAMP(0)'))
+
+class DatasetOperationType(Enum):
+    Create_Dataset = "创建知识库"
+    Delete_Dataset = "删除知识库"
+    Setting_Dataset = "知识库设置"
+    Upload_Document = "上传文档"
+    Remove_Document = "删除文档"
+    Rename_Document = "重命名文档"
+    Archive_Document = "归档"
+    Unarchive_Document = "撤销归档"
+    Enable_Document = "启用"
+    Disabled_Document = "禁用"
+    Setting_Segment = "分段设置"
+
+
+class DatasetOperationLogs(db.Model):
+    __tablename__ = 'dataset_operation_logs'
+    __table_args__ = (
+        db.PrimaryKeyConstraint('id', name='dataset_operation_logs_pkey'),
+    )
+
+    id = db.Column(StringUUID, primary_key=True, server_default=db.text('uuid_generate_v4()'))
+    dataset_id = db.Column(StringUUID, nullable=False)
+    objective = db.Column(db.String(64), nullable=False)
+    opt_type = db.Column(db.String(16), nullable=False)
+    note = db.Column(db.String(64), nullable=False)
+    created_by = db.Column(StringUUID, nullable=False)
+    # 批量插入的日志记录创建时间相同。为了便于分组（以便后续对界面展示调整）
+    created_at = db.Column(db.DateTime, nullable=False)
+
+    @property
+    def dataset_name(self):
+        dataset_obj = db.session.query(Dataset).filter(Dataset.id == self.dataset_id).first()
+        return dataset_obj.name if dataset_obj else ''
+            
+    @property
+    def created_name(self):
+        return Account.query.get(self.created_by).name

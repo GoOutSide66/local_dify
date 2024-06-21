@@ -21,6 +21,7 @@ const loadLangResources = (lang: string) => ({
     datasetDocuments: require(`./${lang}/dataset-documents`).default,
     datasetHitTesting: require(`./${lang}/dataset-hit-testing`).default,
     datasetSettings: require(`./${lang}/dataset-settings`).default,
+    datasetOperationLogs: require(`./${lang}/dataset-operationlog`).default,
     datasetCreation: require(`./${lang}/dataset-creation`).default,
     explore: require(`./${lang}/explore`).default,
     billing: require(`./${lang}/billing`).default,

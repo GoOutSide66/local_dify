@@ -2,7 +2,7 @@ version: '3'
 services:
   # API service
   api:
-    image: langgenius/dify-api:0.6.10
+    image: dify-api:local_v1.0
     restart: always
     environment:
       # Startup mode, 'api' starts the API server.
@@ -195,7 +195,7 @@ services:
   # worker service
   # The Celery worker for processing the queue.
   worker:
-    image: langgenius/dify-api:0.6.10
+    image: dify-api:local_v1.0
     restart: always
     environment:
       CONSOLE_WEB_URL: ''
@@ -320,7 +320,7 @@ services:
 
   # Frontend web application.
   web:
-    image: langgenius/dify-web:0.6.10
+    image: dify-web:local_v1.0
     restart: always
     environment:
       # The base URL of console application api server, refers to the Console base URL of WEB service if console domain is
@@ -339,7 +339,7 @@ services:
 
   # The postgres database.
   db:
-    image: postgres:15-alpine
+    image: dify-postgres:local_v1.0
     restart: always
     environment:
       PGUSER: postgres
@@ -352,8 +352,8 @@ services:
     volumes:
       - ./volumes/db/data:/var/lib/postgresql/data
     # uncomment to expose db(postgresql) port to host
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "54320:5432"
     healthcheck:
       test: [ "CMD", "pg_isready" ]
       interval: 1s
@@ -362,7 +362,7 @@ services:
 
   # The redis cache.
   redis:
-    image: redis:6-alpine
+    image: dify-redis:local_v1.0
     restart: always
     volumes:
       # Mount the redis data directory to the container.
@@ -377,7 +377,7 @@ services:
 
   # The Weaviate vector store.
   weaviate:
-    image: semitechnologies/weaviate:1.19.0
+    image: dify-weaviate:local_v1.0
     restart: always
     volumes:
       # Mount the Weaviate data directory to the container.
@@ -401,7 +401,7 @@ services:
 
   # The DifySandbox
   sandbox:
-    image: langgenius/dify-sandbox:0.2.1
+    image: dify-sandbox:local_v1.0
     restart: always
     environment:
       # The DifySandbox configurations
@@ -423,7 +423,7 @@ services:
   # for more information, please refer to
   # https://docs.dify.ai/getting-started/install-self-hosted/install-faq#id-16.-why-is-ssrf_proxy-needed
   ssrf_proxy:
-    image: ubuntu/squid:latest
+    image: dify-ssrf_proxy:local_v1.0
     restart: always
     volumes:
       # pls clearly modify the squid.conf file to fit your network environment.
@@ -475,7 +475,7 @@ services:
   # The nginx reverse proxy.
   # used for reverse proxying the API service and Web service.
   nginx:
-    image: nginx:latest
+    image: dify-nginx:local_v1.0
     restart: always
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf

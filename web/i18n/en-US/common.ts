@@ -434,6 +434,7 @@ const translation = {
   datasetMenus: {
     documents: 'Documents',
     hitTesting: 'Retrieval Testing',
+    operationLogs: 'Operation Logs',
     settings: 'Settings',
     emptyTip: 'The Knowledge has not been associated, please go to the application or plug-in to complete the association.',
     viewDoc: 'View documentation',

@@ -414,6 +414,7 @@ const translation = {
   datasetMenus: {
     documents: '문서',
     hitTesting: '검색 테스트',
+    operationLogs: '운영 로그',
     settings: '설정',
     emptyTip: '연결된 지식이 없습니다. 애플리케이션 또는 플러그인으로 이동하여 연결을 완료하세요.',
     viewDoc: '문서 보기',
